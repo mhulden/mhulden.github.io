@@ -1,0 +1,16 @@
+{
+  "inventories": [
+    "EnglishNoDiphthongs.inv",
+    "German.inv",
+    "HypotheticalLanguage.inv",
+    "Ilokano.inv",
+    "Indonesian.inv",
+    "Japanese.inv",
+    "Korean.inv",
+    "Lango.inv",
+    "Lomongo.inv",
+    "Spanish.inv",
+    "TobaBatak.inv",
+    "Turkish.inv"
+  ]
+}

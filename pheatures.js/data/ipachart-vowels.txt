@@ -1,0 +1,6 @@
+[VOWELS]	[front unrounded]	[front rounded]	[central unrounded]	[central rounded]	[back unrounded]	[back rounded]									
+ 	i	y	ɨ	ʉ	ɯ	u									
+ 	ɪ	ʏ	 	 	 	ʊ									
+ 	e	ø	ɘ	ɵ	ɤ	o									
+ 	ɛ	œ	ə	ɞ	ʌ	ɔ									
+ 	ӕ	ɶ	a	 	ɑ	ɒ									
