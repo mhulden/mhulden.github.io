@@ -13,8 +13,10 @@
     <p class="sub">An interactive companion to <em>Learning Bimachines from Aligned Examples</em>: follow the RPNI-style learner as it merges states, queries the oracle, completes the output table and minimizes.</p>
   </div>
   <div class="mode">
+    <button id="mode-intro" class="tab" type="button">Introduction</button>
     <button id="mode-guided" class="tab active" type="button">Guided: Figure 1</button>
     <button id="mode-custom" class="tab" type="button">Try your own</button>
+    <button id="mode-experiments" class="tab" type="button">Experiments</button>
   </div>
 </header>
 
@@ -28,7 +30,7 @@
     </label>
     <div class="row">
       <label>Witness budget k <input id="c-k" type="number" min="0" max="200" value="6"></label>
-      <label>Witness length ≤ <input id="c-len" type="number" min="1" max="8" value="2"></label>
+      <label title="Witnesses are the merged state's representative extended by a continuation (left pass) or head (right pass) of at most this length">Continuation length ≤ <input id="c-len" type="number" min="1" max="8" value="2"></label>
       <button id="c-random" type="button">Random sample</button>
       <button id="c-run" type="button" class="primary">Learn</button>
     </div>
@@ -53,12 +55,15 @@
   <div id="phase" class="phase"></div>
 </section>
 
-<section class="panel narration">
+<section id="intro" class="intro" hidden></section>
+<section id="experiments" class="intro" hidden></section>
+
+<section class="panel narration learner-only">
   <p id="step-text"></p>
   <div id="guide" class="guide" hidden></div>
 </section>
 
-<main class="grid">
+<main class="grid learner-only">
   <section class="panel graph">
     <h2>Left automaton <span class="muted">reads left → right</span></h2>
     <div id="g-left" class="svgwrap"></div>
@@ -92,7 +97,7 @@
   </section>
 </main>
 
-<footer class="foot">
+<footer class="foot learner-only">
   <span class="key"><i class="dot red"></i>red: settled</span>
   <span class="key"><i class="dot blue"></i>blue: candidate to merge</span>
   <span class="key"><i class="dot ring"></i>colored rings: states folded together</span>

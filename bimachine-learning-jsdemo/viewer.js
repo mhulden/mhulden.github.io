@@ -1,15 +1,27 @@
 import { learnBimachine, Oracle } from "./learner.js";
 import { ORACLES, WALKTHROUGH, compileOracle } from "./presets.js";
+import { drawDFA, RING_COLORS } from "./draw.js";
+import { Deck } from "./deck.js";
+import { INTRO_SLIDES, INTRO_SECTIONS } from "./intro.js";
+import { EXP_SLIDES, EXP_SECTIONS } from "./experiments.js";
 
 const $ = (id) => document.getElementById(id);
-const SVGNS = "http://www.w3.org/2000/svg";
-const RING_COLORS = ["#eb6834", "#1baf7a", "#4a3aa7", "#e8a800", "#e87ba4", "#008300", "#2a78d6", "#8a4b2a"];
 
 const MAX_STEPS = 20000;
 const MAX_MILLIS = 10000;
 let run = null;        // {events, alphabet, oracle, guided}
 let step = 0;
 let timer = null;
+let mode = "guided";   // "intro" | "guided" | "custom" | "experiments"
+// Slide decks: the Introduction and Experiments tabs. Each remembers its step.
+const deckActions = { guided: () => guided(), experiments: () => experiments() };
+const decks = {
+  intro: new Deck($("intro"), INTRO_SLIDES, INTRO_SECTIONS, deckActions),
+  experiments: new Deck($("experiments"), EXP_SLIDES, EXP_SECTIONS, deckActions),
+};
+const deckStep = { intro: 0, experiments: 0 };
+let deckAnimate = false;
+const deck = () => decks[mode];
 
 // ---------------------------------------------------------------------------
 // Explanations shown the first time each kind of step appears
@@ -92,145 +104,6 @@ function startRun({ oracleKey, oracleSource, train, k, len, guided }) {
   step = 0;
   $("scrub").max = String(run.events.length - 1);
   render();
-}
-
-// ---------------------------------------------------------------------------
-// Graph layout and drawing
-// ---------------------------------------------------------------------------
-
-function el(tag, attrs = {}, parent = null) {
-  const e = document.createElementNS(SVGNS, tag);
-  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
-  if (parent) parent.appendChild(e);
-  return e;
-}
-
-function layout(dfa, alphabet) {
-  const trans = new Map();
-  for (const [s, a, t] of dfa.edges) {
-    if (!trans.has(s)) trans.set(s, new Map());
-    trans.get(s).set(a, t);
-  }
-  const depth = new Map([[dfa.start, 0]]);
-  const repr = new Map([[dfa.start, ""]]);
-  const order = [dfa.start];
-  for (let i = 0; i < order.length; i++) {
-    const s = order[i];
-    for (const a of alphabet) {
-      const t = trans.get(s)?.get(a);
-      if (t === undefined || depth.has(t)) continue;
-      depth.set(t, depth.get(s) + 1);
-      repr.set(t, repr.get(s) + a);
-      order.push(t);
-    }
-  }
-  const maxD = Math.max(0, ...depth.values());
-  for (const s of dfa.states) {
-    if (!depth.has(s)) {
-      depth.set(s, maxD + 1);
-      repr.set(s, "?");
-      order.push(s);
-    }
-  }
-  const layers = new Map();
-  for (const s of order) {
-    const d = depth.get(s);
-    if (!layers.has(d)) layers.set(d, []);
-    layers.get(d).push(s);
-  }
-  return { trans, depth, repr, layers };
-}
-
-function drawDFA(container, dfa, opts) {
-  const { alphabet, mirror, red, blue, rings, fresh, marks } = opts;
-  container.innerHTML = "";
-  const L = layout(dfa, alphabet);
-  const DX = 64, DY = 42, R = 13, PAD = 34, TOP = 30;
-  const nLayers = Math.max(...L.layers.keys()) + 1;
-  const maxRows = Math.max(...[...L.layers.values()].map((l) => l.length));
-  const W = PAD * 2 + (nLayers - 1) * DX + 30;
-  const H = PAD * 2 + (maxRows - 1) * DY + 10 + TOP;
-  const pos = new Map();
-  for (const [d, states] of L.layers) {
-    states.forEach((s, i) => {
-      const x = PAD + 15 + d * DX;
-      const y = TOP + PAD + (i - (states.length - 1) / 2) * DY + ((maxRows - 1) * DY) / 2;
-      pos.set(s, [mirror ? W - x : x, y]);
-    });
-  }
-  const scale = W < 320 ? 1.5 : 1;  // draw small machines larger
-  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, width: W * scale, height: H * scale, role: "img" });
-  const defs = el("defs", {}, svg);
-  const m = el("marker", { id: `arrow-${container.id}`, viewBox: "0 0 10 10", refX: "9", refY: "5", markerWidth: "7", markerHeight: "7", orient: "auto-start-reverse" }, defs);
-  el("path", { d: "M0,0 L10,5 L0,10 z", fill: "currentColor", class: "arrowhead" }, m);
-  svg.style.color = getComputedStyle(document.documentElement).getPropertyValue("--edge");
-
-  // Edges grouped by (source, target).
-  const groups = new Map();
-  for (const [s, a, t] of dfa.edges) {
-    const k = `${s}>${t}`;
-    if (!groups.has(k)) groups.set(k, { s, t, labels: [] });
-    groups.get(k).labels.push(a);
-  }
-  const edgeLayer = el("g", {}, svg);
-  for (const { s, t, labels } of groups.values()) {
-    const [x1, y1] = pos.get(s);
-    const [x2, y2] = pos.get(t);
-    const label = labels.sort().join(",");
-    let d, lx, ly;
-    if (s === t) {
-      d = `M ${x1 - 6} ${y1 - R + 2} C ${x1 - 16} ${y1 - R - 22}, ${x1 + 16} ${y1 - R - 22}, ${x1 + 6} ${y1 - R + 2}`;
-      lx = x1; ly = y1 - R - 19;
-    } else {
-      const forward = L.depth.get(t) === L.depth.get(s) + 1 && !groups.has(`${t}>${s}`);
-      const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy);
-      const ux = dx / len, uy = dy / len;
-      const sx = x1 + ux * R, sy = y1 + uy * R, ex = x2 - ux * R, ey = y2 - uy * R;
-      if (forward) {
-        d = `M ${sx} ${sy} L ${ex} ${ey}`;
-        lx = (sx + ex) / 2; ly = (sy + ey) / 2 - 4;
-      } else {
-        const bend = groups.has(`${t}>${s}`) ? 18 : 26 + Math.min(40, Math.abs(L.depth.get(t) - L.depth.get(s)) * 6);
-        const cx = (x1 + x2) / 2 - uy * bend, cy = (y1 + y2) / 2 + ux * bend;
-        const a1 = Math.atan2(cy - y1, cx - x1), a2 = Math.atan2(cy - y2, cx - x2);
-        d = `M ${x1 + R * Math.cos(a1)} ${y1 + R * Math.sin(a1)} Q ${cx} ${cy} ${x2 + R * Math.cos(a2)} ${y2 + R * Math.sin(a2)}`;
-        lx = (x1 + x2) / 4 + cx / 2; ly = (y1 + y2) / 4 + cy / 2;
-      }
-    }
-    el("path", { d, class: "edge", "marker-end": `url(#arrow-${container.id})` }, edgeLayer);
-    const tx = el("text", { x: lx, y: ly, class: "elabel", "text-anchor": "middle" }, edgeLayer);
-    tx.textContent = label;
-  }
-
-  // Start arrow.
-  const [sx, sy] = pos.get(dfa.start);
-  const dir = mirror ? 1 : -1;
-  el("line", { x1: sx + dir * (R + 18), y1: sy, x2: sx + dir * (R + 2), y2: sy, class: "startarrow", "marker-end": `url(#arrow-${container.id})` }, edgeLayer);
-
-  // Nodes.
-  const ringOf = new Map();
-  (rings || []).forEach((cls, i) => cls.forEach((s) => ringOf.set(s, RING_COLORS[i % RING_COLORS.length])));
-  for (const s of dfa.states) {
-    const [x, y] = pos.get(s);
-    const classes = ["node"];
-    if (red.includes(s)) classes.push("red");
-    else if (blue.includes(s)) classes.push("blue");
-    if (s === dfa.sink) classes.push("sink");
-    if (fresh && fresh.has(s)) classes.push("fresh");
-    const g = el("g", { class: classes.join(" ") }, svg);
-    const title = el("title", {}, g);
-    const rep = L.repr.get(s);
-    title.textContent = `state ${s}; representative ${mirror ? "suffix" : "prefix"} "${mirror ? [...rep].reverse().join("") : rep}"${s === dfa.sink ? " (sink)" : ""}`;
-    if (ringOf.has(s)) el("circle", { cx: x, cy: y, r: R + 4, class: "ring", stroke: ringOf.get(s) }, g);
-    el("circle", { cx: x, cy: y, r: R, class: "body" }, g);
-    const t = el("text", { x, y }, g);
-    t.textContent = String(s);
-    if (marks && marks.has(s)) {
-      const tag = el("text", { x, y: y + R + 10, class: "tag", "text-anchor": "middle" }, g);
-      tag.textContent = marks.get(s);
-    }
-  }
-  container.appendChild(svg);
 }
 
 // ---------------------------------------------------------------------------
@@ -389,7 +262,23 @@ function currentRound() {
   return null;
 }
 
+function renderDeck() {
+  const d = deck(), at = deckStep[mode];
+  const loc = d.locate(at);
+  $("scrub").max = String(d.length - 1);
+  $("scrub").value = String(at);
+  $("counter").textContent = `Slide ${loc.slide + 1} / ${loc.slides}` + (loc.builds > 1 ? ` · ${loc.build + 1}/${loc.builds}` : "");
+  $("b-play").textContent = timer ? "⏸ Pause" : "▶ Play";
+  $("phase").innerHTML = d.sections().map((name, i) => `<span class="${i === loc.section ? "now" : ""} jump" data-sec="${i}">${name}</span>`).join("");
+  for (const chip of $("phase").querySelectorAll("[data-sec]")) {
+    chip.onclick = () => { stop(); go(d.sectionStart(Number(chip.dataset.sec)), false); };
+  }
+  d.render(at, deckAnimate);
+  deckAnimate = false;
+}
+
 function render() {
+  if (decks[mode]) return renderDeck();
   if (!run) return;
   const ev = run.events[step];
   const prev = step > 0 ? run.events[step - 1] : null;
@@ -443,7 +332,15 @@ function render() {
 // Controls
 // ---------------------------------------------------------------------------
 
-function go(i) {
+function go(i, animate = true) {
+  if (decks[mode]) {
+    const next = Math.max(0, Math.min(deck().length - 1, i));
+    deckAnimate = animate && next === deckStep[mode] + 1;
+    deckStep[mode] = next;
+    history.replaceState(null, "", `#${mode === "intro" ? "intro" : "exp"}=${next + 1}`);
+    render();
+    return;
+  }
   if (!run) return;
   step = Math.max(0, Math.min(run.events.length - 1, i));
   if (run.guided) history.replaceState(null, "", `#step=${step + 1}`);
@@ -455,6 +352,20 @@ function stop() {
   if (run) render();
 }
 function play() {
+  if (decks[mode]) {
+    // In a slide deck, play runs through the builds of the current slide.
+    if (timer) return stop();
+    const at = deckStep[mode];
+    const end = deck().slideStart(at, 1) - 1;
+    const last = end < at ? deck().length - 1 : end;
+    if (at >= last) return go(at + 1);
+    timer = setInterval(() => {
+      go(deckStep[mode] + 1);
+      if (deckStep[mode] >= last) stop();
+    }, 1800);
+    render();
+    return;
+  }
   if (!run) return;
   if (timer) return stop();
   if (step >= run.events.length - 1) step = 0;
@@ -465,17 +376,22 @@ function play() {
   render();
 }
 
+const cur = () => (decks[mode] ? deckStep[mode] : step);
+
 $("b-first").onclick = () => { stop(); go(0); };
-$("b-prev").onclick = () => { stop(); go(step - 1); };
-$("b-next").onclick = () => { stop(); go(step + 1); };
+$("b-prev").onclick = () => { stop(); go(cur() - 1); };
+$("b-next").onclick = () => { stop(); go(cur() + 1); };
 $("b-last").onclick = () => { stop(); go(Infinity); };
 $("b-play").onclick = play;
-$("scrub").oninput = (e) => { stop(); go(Number(e.target.value)); };
+$("scrub").oninput = (e) => { stop(); go(Number(e.target.value), false); };
 $("t-input").oninput = () => run && renderTester(run.events[step].snapshot);
 document.addEventListener("keydown", (e) => {
   if (["INPUT", "TEXTAREA", "SELECT"].includes(e.target.tagName)) return;
-  if (e.key === "ArrowRight") { stop(); go(step + 1); }
-  else if (e.key === "ArrowLeft") { stop(); go(step - 1); }
+  // Presentation remotes usually send PageDown / PageUp.
+  if (decks[mode] && e.shiftKey && e.key === "ArrowRight") { stop(); go(deck().slideStart(cur(), 1), false); }
+  else if (decks[mode] && e.shiftKey && e.key === "ArrowLeft") { stop(); go(deck().slideStart(cur(), -1), false); }
+  else if (e.key === "ArrowRight" || e.key === "PageDown") { e.preventDefault(); stop(); go(cur() + 1); }
+  else if (e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); stop(); go(cur() - 1); }
   else if (e.key === " ") { e.preventDefault(); play(); }
   else if (e.key === "Home") { stop(); go(0); }
   else if (e.key === "End") { stop(); go(Infinity); }
@@ -488,10 +404,30 @@ function showError(msg) {
   box.textContent = msg || "";
 }
 
+function setMode(m) {
+  stop();
+  mode = m;
+  for (const k of ["intro", "guided", "custom", "experiments"]) $(`mode-${k}`).classList.toggle("active", k === m);
+  $("custom").hidden = m !== "custom";
+  $("intro").hidden = m !== "intro";
+  $("experiments").hidden = m !== "experiments";
+  for (const e of document.querySelectorAll(".learner-only")) e.hidden = Boolean(decks[m]);
+}
+
+function introduction() {
+  setMode("intro");
+  go(deckStep.intro, false);
+}
+
+function experiments() {
+  setMode("experiments");
+  window.scrollTo(0, 0);
+  go(deckStep.experiments, false);
+}
+
 function guided() {
-  $("mode-guided").classList.add("active");
-  $("mode-custom").classList.remove("active");
-  $("custom").hidden = true;
+  setMode("guided");
+  window.scrollTo(0, 0);
   $("t-input").value = "aabbabaabb";
   const o = ORACLES[WALKTHROUGH.oracle];
   startRun({
@@ -520,9 +456,9 @@ function loadPreset(key) {
 }
 
 function custom() {
-  $("mode-custom").classList.add("active");
-  $("mode-guided").classList.remove("active");
-  $("custom").hidden = false;
+  setMode("custom");
+  if (run) $("scrub").max = String(run.events.length - 1);
+  render();
   showError("");
 }
 
@@ -561,20 +497,34 @@ for (const [key, o] of Object.entries(ORACLES)) {
 sel.onchange = () => loadPreset(sel.value);
 $("c-random").onclick = () => { $("c-train").value = randomSample(ORACLES[sel.value].alphabet).join(" "); };
 $("c-run").onclick = runCustom;
+$("mode-intro").onclick = introduction;
+$("mode-experiments").onclick = experiments;
 $("mode-guided").onclick = guided;
 $("mode-custom").onclick = custom;
 
-// Links: #step=N opens the walkthrough at step N; #custom=TASK opens "Try your own"
+// Links: #intro=N opens the introduction at step N (the default page);
+// #exp=N opens the experiments slides at step N;
+// #step=N opens the walkthrough at step N; #custom=TASK opens "Try your own"
 // with that task and a random sample, and runs it.
 const customLink = /custom=(\w+)/.exec(location.hash);
+const stepLink = /(?:^#|&)step=(\d+)/.exec(location.hash);
+const introLink = /intro=(\d+)/.exec(location.hash);
+const expLink = /exp=(\d+)/.exec(location.hash);
 if (customLink && ORACLES[customLink[1]]) {
   sel.value = customLink[1];
   loadPreset(sel.value);
   custom();
   runCustom();
-} else {
+} else if (stepLink) {
   loadPreset(sel.value);
   guided();
-  const linked = /step=(\d+)/.exec(location.hash);
-  if (linked) go(Number(linked[1]) - 1);
+  go(Number(stepLink[1]) - 1);
+} else if (expLink) {
+  loadPreset(sel.value);
+  deckStep.experiments = Math.max(0, Math.min(decks.experiments.length - 1, Number(expLink[1]) - 1));
+  experiments();
+} else {
+  loadPreset(sel.value);
+  deckStep.intro = introLink ? Math.max(0, Math.min(decks.intro.length - 1, Number(introLink[1]) - 1)) : 0;
+  introduction();
 }

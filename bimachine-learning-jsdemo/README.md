@@ -15,7 +15,9 @@ Then open <http://localhost:8000/>. There is no build step and nothing to instal
 
 ## What it shows
 
-- **Guided: Figure 1.** The learner recovers the bimachine of Figure 1 in the paper: capitalize a symbol if its left neighbour is `a` and another `a` follows. It uses six training inputs and a witness budget of k = 6 with witness length ≤ 2, and makes 26 distinct oracle queries in 63 steps. Every kind of step is explained the first time it occurs, and the final machine is Figure 1's, with states numbered from 0.
+- **Introduction.** Twelve presentation-style slides that step through with the same controls (→/← or PageDown/PageUp step through builds, Shift+→/← jump a slide, Play runs the current slide's builds, the section chips jump to a section): a running example; the same function as a nondeterministic transducer, with all its runs, and as Figure 1's bimachine, with a clickable trace; why bimachines; existing learners (RPNI, OSTIA, Boiret et al.) and why OSTIA cannot handle Figure 1; aligned vs. unaligned data; an animated RPNI run; from RPNI to bimachines; the oracle; and a bridge to the walkthrough. `#intro=N` opens step N. This is the page's default view.
+- **Experiments.** Eight slides with the same controls, meant to follow the walkthrough: the sample-only learner on random target bimachines (agreement vs. exact recovery, undefined lookups, coverage ceiling), the comparison with OSTIA, and oracle ablations on the battery (50 training strings with and without the oracle; the witness budget k on global-or-local). `#exp=N` opens step N. The numbers come from `experiments_data.js`, generated from `../results/*.jsonl` by `python3 make_demo_data.py` in the repository root; the ablations come from `../run_ablation.py`.
+- **Guided: Figure 1.** The learner recovers the bimachine of Figure 1 in the paper: capitalize a symbol if its left neighbour is `a` and another `a` follows. It uses six training inputs and at most k = 6 witness strings per merge, each the merged state's representative extended by a continuation (left pass) or head (right pass) of length ≤ 2, and makes 26 distinct oracle queries in 63 steps. Every kind of step is explained the first time it occurs, and the final machine is Figure 1's, with states numbered from 0.
 - **Try your own.** Pick the Figure 1 function or any of the paper's ten benchmark tasks, edit the training inputs, the witness budget or the oracle itself (a JavaScript function returning one output chunk per input symbol), and run the learner.
 
 Each step shows:
@@ -43,5 +45,8 @@ python3 jsdemo/test/parity.py      # from the repository root
 |---|---|
 | `index.html`, `style.css`, `viewer.js` | The page and its rendering (automata layout, tables, narration) |
 | `learner.js` | The learner, recording one event per step |
+| `deck.js`, `intro.js`, `experiments.js` | Slide-deck stepping, and the Introduction and Experiments slides |
+| `experiments_data.js` | Experiment results for the slides (generated; do not edit) |
+| `rpni.js`, `draw.js` | A small RPNI for the introduction, and the automaton drawing shared by all views |
 | `presets.js` | The Figure 1 oracle, the ten benchmark oracles, and the walkthrough settings |
 | `test/parity.py`, `test/run_js.mjs` | Parity test against the Python learner |
